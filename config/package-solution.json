@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "leave-tracker-app-client-side-solution",
+    "id": "636e70a9-1a0b-4996-91c2-6448fe35f43e",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.21.1"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "LeaveTrackerApp description"
+      },
+      "longDescription": {
+        "default": "LeaveTrackerApp description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "leave-tracker-app Feature",
+        "description": "The feature that activates elements of the leave-tracker-app solution.",
+        "id": "cda97f87-c520-41da-b090-23abd49e41bd",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/leave-tracker-app.sppkg"
+  }
+}

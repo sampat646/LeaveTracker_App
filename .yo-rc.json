@@ -1,0 +1,18 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "plusBeta": false,
+    "isCreatingSolution": true,
+    "nodeVersion": "18.18.2",
+    "sdksVersions": {},
+    "version": "1.21.1",
+    "libraryName": "leave-tracker-app",
+    "libraryId": "636e70a9-1a0b-4996-91c2-6448fe35f43e",
+    "environment": "spo",
+    "packageManager": "npm",
+    "solutionName": "LeaveTrackerApp",
+    "solutionShortDescription": "LeaveTrackerApp description",
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "componentType": "webpart"
+  }
+}
