@@ -99,7 +99,8 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
       this.loadHolidaysList(),
       this.loadLeaveTypeChoices(),
       this.loadHolidayTypeChoices(),
-      this.getSiteListNames()  // ADD THIS LINE
+      this.getSiteListNames(),
+     
     ]);
 
     this.isAdmin = await this.checkUserAdmin();
@@ -108,7 +109,9 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
 
   private getCurrentUserEmail(): string {
     // return this.context.pageContext.user.email?.toLowerCase() || "";
-    return "jacob.yeldhos@aciesinnovations.com";
+    // return "jacob.yeldhos@aciesinnovations.com";
+    // return "naithik.bidari@aciesinnovations.com";
+    return "claudia.palix@aciesinnovations.com";
   }
 
   private async loadHolidayTypeChoices(): Promise<void> {
@@ -281,8 +284,9 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
     const endDateInput = this.domElement.querySelector('#endDate') as HTMLInputElement;
     const reasonInput = this.domElement.querySelector('#reason') as HTMLTextAreaElement;
     const otherLeaveInput = this.domElement.querySelector('#otherLeaveInput') as HTMLInputElement;
+    const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
 
-    if (!leaveTypeSelect || !startDateInput || !endDateInput || !reasonInput) {
+    if (!leaveTypeSelect || !startDateInput || !endDateInput || !reasonInput || !managerEmailInput) {
       alert('Please fill all required fields');
       return;
     }
@@ -291,9 +295,10 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
     const startDate = startDateInput.value;
     const endDate = endDateInput.value;
     const reason = reasonInput.value;
+    const managerEmail = managerEmailInput.value;
 
-    if (!leaveType || !startDate || !endDate || !reason) {
-      alert('Please fill all required fields');
+    if (!leaveType || !startDate || !endDate || !reason || !managerEmail) {
+      alert('Please fill all required fields including manager email');
       return;
     }
 
@@ -317,7 +322,8 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
         NumberOfDays: numberOfDays,
         Reason: reason,
         RequestDate: new Date().toISOString(),
-        Status: 'Pending'
+        Status: 'Pending',
+        ManagerEmail: managerEmail  // Store manager email
       };
 
       if (userId) {
@@ -369,6 +375,7 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
           break;
         case 'request':
           mainContent.innerHTML = this.renderRequestLeave(this.leaveTypes);
+           this.initializeManagerEmail()
           break;
         case 'holidays':
           mainContent.innerHTML = this.renderGovHolidays(this.cachedHolidays);
@@ -479,6 +486,67 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
       </div>
     `;
   }
+private async getManagerEmail(): Promise<string | null> {
+  try {
+    const currentUserEmail = this.getCurrentUserEmail();
+    console.log("⬅️ Current User Email:", currentUserEmail);
+
+    const profileUrl = `${this.context.pageContext.web.absoluteUrl}/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='i:0%23.f|membership|${encodeURIComponent(currentUserEmail)}'`;
+    console.log("🔗 Profile API URL:", profileUrl);
+
+    const response = await this.context.spHttpClient.get(
+      profileUrl,
+      SPHttpClient.configurations.v1,
+      {
+        headers: {
+          'Accept': 'application/json;odata=nometadata',
+          'odata-version': ''
+        }
+      }
+    );
+
+    console.log("📡 API Response Status:", response.status);
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log("📦 Profile Data Received:", data);
+
+      if (data.UserProfileProperties) {
+        console.log("🔍 Searching for Manager property...");
+        const managerProperty = data.UserProfileProperties.find(
+          (prop: any) => prop.Key === 'Manager'
+        );
+
+        console.log("🧠 Manager Property:", managerProperty);
+
+        if (managerProperty && managerProperty.Value) {
+          const managerAccountName = managerProperty.Value;
+          console.log("👤 Raw Manager Account Name:", managerAccountName);
+
+          const emailMatch = managerAccountName.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+          console.log("📧 Extracted Manager Email:", emailMatch ? emailMatch[0] : "Not found");
+
+          if (emailMatch) {
+            return emailMatch[0];
+          }
+        } else {
+          console.warn("⚠ Manager property NOT found in profile.");
+        }
+      } else {
+        console.warn("⚠ No UserProfileProperties found.");
+      }
+    }
+
+    console.warn("⚠ Response not OK. Manager email not found.");
+    return null;
+
+  } catch (error) {
+    console.error('❌ Error getting manager email:', error);
+    return null;
+  }
+}
+
+
 
   private renderRequestLeave(leaveTypes: string[]): string {
     const updatedTypes = Array.from(new Set([...leaveTypes, "Other"]));
@@ -488,43 +556,219 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
       .join('');
 
     return `
-      <div class="${styles.card}">
-        <h1>Request Leave</h1>
+    <div class="${styles.card}">
+      <h1>Request Leave</h1>
 
-        <div class="${styles.formGroup}">
-          <label class="${styles.label}">Leave Type</label>
-          <select class="${styles.select}" id="leaveType">
-            ${optionsHtml}
-          </select>
-        </div>
-
-        <!-- Hidden input for Other -->
-        <div class="${styles.formGroup}" id="otherLeaveContainer" style="display:none;">
-          <label class="${styles.label}">Enter Leave Type</label>
-          <input type="text" class="${styles.input}" id="otherLeaveInput" placeholder="Enter custom leave type" />
-        </div>
-
-        <div class="${styles.formGroup}">
-          <label class="${styles.label}">Start Date</label>
-          <input type="date" class="${styles.input}" id="startDate" />
-        </div>
-
-        <div class="${styles.formGroup}">
-          <label class="${styles.label}">End Date</label>
-          <input type="date" class="${styles.input}" id="endDate" />
-        </div>
-
-        <div class="${styles.formGroup}">
-          <label class="${styles.label}">Reason</label>
-          <textarea class="${styles.textarea}" rows="3" id="reason" placeholder="Enter reason for leave"></textarea>
-        </div>
-
-        <button class="${styles.submitBtn}" id="btnSubmitLeave">
-          Submit Request
-        </button>
+      <div class="${styles.formGroup}">
+        <label class="${styles.label}">Leave Type</label>
+        <select class="${styles.select}" id="leaveType">
+          ${optionsHtml}
+        </select>
       </div>
-    `;
+
+      <!-- Hidden input for Other -->
+      <div class="${styles.formGroup}" id="otherLeaveContainer" style="display:none;">
+        <label class="${styles.label}">Enter Leave Type</label>
+        <input type="text" class="${styles.input}" id="otherLeaveInput" placeholder="Enter custom leave type" />
+      </div>
+
+      <div class="${styles.formGroup}">
+        <label class="${styles.label}">Start Date</label>
+        <input type="date" class="${styles.input}" id="startDate" />
+      </div>
+
+      <div class="${styles.formGroup}">
+        <label class="${styles.label}">End Date</label>
+        <input type="date" class="${styles.input}" id="endDate" />
+      </div>
+
+      <div class="${styles.formGroup}">
+        <label class="${styles.label}">Reason</label>
+        <textarea class="${styles.textarea}" rows="3" id="reason" placeholder="Enter reason for leave"></textarea>
+      </div>
+
+      <!-- Manager Email Field (will be auto-filled or manual) -->
+      <div class="${styles.formGroup}" id="managerContainer">
+        <label class="${styles.label}">Manager Email</label>
+        <input type="email" class="${styles.input}" id="managerEmail" placeholder="Manager email will be auto-filled" readonly />
+        <small style="display:block; margin-top:5px; color:#666;">
+          <span id="managerStatus">Fetching manager information...</span>
+        </small>
+      </div>
+
+      <!-- People Picker (hidden by default, shown if manager not found) -->
+      <div class="${styles.formGroup}" id="managerPickerContainer" style="display:none;">
+        <label class="${styles.label}">Select Your Manager</label>
+        <div id="managerPeoplePicker"></div>
+      </div>
+
+      <button class="${styles.submitBtn}" id="btnSubmitLeave">
+        Submit Request
+      </button>
+    </div>
+  `;
   }
+
+private async initializeManagerEmail(): Promise<void> {
+  console.log("🚀 Initializing Manager Email...");
+
+  const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
+  const managerStatus = this.domElement.querySelector('#managerStatus') as HTMLSpanElement;
+  const managerPickerContainer = this.domElement.querySelector('#managerPickerContainer') as HTMLDivElement;
+
+  if (!managerEmailInput || !managerStatus) {
+    console.error("❌ Manager email input or status field missing!");
+    return;
+  }
+
+  try {
+    const managerEmail = await this.getManagerEmail();
+    console.log("📧 Manager Email Returned:", managerEmail);
+
+    if (managerEmail) {
+      console.log("✅ Manager email found automatically");
+      managerEmailInput.value = managerEmail;
+      managerEmailInput.readOnly = true;
+      managerStatus.textContent = '✓ Manager found automatically';
+      managerStatus.style.color = 'green';
+    } else {
+      console.warn("⚠ Manager email NOT found, showing picker...");
+      managerEmailInput.readOnly = false;
+      managerEmailInput.placeholder = 'Enter manager email manually or use picker below';
+      managerStatus.textContent = '⚠ Manager not found. Please enter manually or select below.';
+      managerStatus.style.color = 'orange';
+
+      if (managerPickerContainer) {
+        managerPickerContainer.style.display = 'block';
+        await this.initializePeoplePicker();
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error initializing manager email:', error);
+    managerEmailInput.readOnly = false;
+    managerStatus.textContent = '⚠ Could not fetch manager. Please enter manually.';
+    managerStatus.style.color = 'red';
+  }
+}
+
+
+  // Initialize People Picker for manager selection
+ // Initialize People Picker for manager selection
+private async initializePeoplePicker(): Promise<void> {
+  console.log("🔵 Initializing People Picker...");
+
+  const pickerContainer = this.domElement.querySelector('#managerPeoplePicker') as HTMLDivElement;
+  const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
+
+  if (!pickerContainer) {
+    console.error("❌ Picker container (#managerPeoplePicker) NOT found in DOM!");
+    return;
+  }
+
+  console.log("✅ Picker container found.");
+
+  pickerContainer.innerHTML = `
+    <input type="text" 
+           id="managerSearch" 
+           class="${styles.input}" 
+           placeholder="Type to search for manager..." 
+           style="margin-bottom:5px;" />
+    <div id="managerResults" style="max-height:150px; overflow-y:auto; border:1px solid #ddd; display:none;"></div>
+  `;
+
+  const searchInput = pickerContainer.querySelector('#managerSearch') as HTMLInputElement;
+  const resultsDiv = pickerContainer.querySelector('#managerResults') as HTMLDivElement;
+
+  console.log("🔧 Search input and results div created.");
+
+  // Search on typing
+  searchInput.addEventListener('input', async (e) => {
+    const searchText = (e.target as HTMLInputElement).value;
+
+    console.log("⌨ User typing:", searchText);
+
+    if (searchText.length < 2) {
+      console.log("ℹ Search text too short, hiding results.");
+      resultsDiv.style.display = "none";
+      return;
+    }
+
+    try {
+      console.log("🔍 Searching users for:", searchText);
+      const users = await this.searchUsers(searchText);
+
+      console.log("📥 Users returned from API:", users);
+
+      if (users.length > 0) {
+        resultsDiv.innerHTML = users.map(user => `
+          <div class="user-result" 
+               data-email="${user.Email}" 
+               style="padding:8px; cursor:pointer; border-bottom:1px solid #eee;">
+            <strong>${user.Title}</strong><br/>
+            <small>${user.Email}</small>
+          </div>
+        `).join('');
+
+        resultsDiv.style.display = "block";
+        console.log("📋 Displaying results.");
+
+        // Add click handlers
+        resultsDiv.querySelectorAll('.user-result').forEach(item => {
+          item.addEventListener('click', () => {
+            const email = item.getAttribute('data-email');
+            console.log("🖱 User clicked:", email);
+
+            if (email && managerEmailInput) {
+              managerEmailInput.value = email;
+              console.log("✔ Manager email updated:", email);
+
+              resultsDiv.style.display = "none";
+              searchInput.value = "";
+            }
+          });
+        });
+
+      } else {
+        console.warn("⚠ No matching users found for:", searchText);
+        resultsDiv.innerHTML = '<div style="padding:8px;">No users found</div>';
+        resultsDiv.style.display = "block";
+      }
+
+    } catch (error) {
+      console.error("❌ Error searching users:", error);
+    }
+  });
+}
+
+
+// Search Users API Call
+private async searchUsers(searchText: string): Promise<any[]> {
+  try {
+    const graphClient = await this.context.msGraphClientFactory.getClient("3");
+
+    const response = await graphClient
+      .api("/users")
+      .filter(`startswith(displayName,'${searchText}') or startswith(mail,'${searchText}')`)
+      .select("id,displayName,mail,userPrincipalName")
+      .top(20)
+      .get();
+
+    console.log("🔎 Graph Search Response:", response);
+
+    return response.value.map((user: any) => ({
+      Title: user.displayName,
+      Email: user.mail || user.userPrincipalName
+    }));
+
+  } catch (error) {
+    console.error("❌ Graph API Search Error:", error);
+    return [];
+  }
+}
+
+
+
+
 
   private renderGovHolidays(holidays: IGovernmentHoliday[]): string {
     const holidayItems = holidays
