@@ -100,7 +100,7 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
       this.loadLeaveTypeChoices(),
       this.loadHolidayTypeChoices(),
       this.getSiteListNames(),
-     
+
     ]);
 
     this.isAdmin = await this.checkUserAdmin();
@@ -109,9 +109,9 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
 
   private getCurrentUserEmail(): string {
     // return this.context.pageContext.user.email?.toLowerCase() || "";
-    // return "jacob.yeldhos@aciesinnovations.com";
+    return "jacob.yeldhos@aciesinnovations.com";
     // return "naithik.bidari@aciesinnovations.com";
-    return "claudia.palix@aciesinnovations.com";
+    // return "claudia.palix@aciesinnovations.com";
   }
 
   private async loadHolidayTypeChoices(): Promise<void> {
@@ -375,7 +375,7 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
           break;
         case 'request':
           mainContent.innerHTML = this.renderRequestLeave(this.leaveTypes);
-           this.initializeManagerEmail()
+          this.initializeManagerEmail()
           break;
         case 'holidays':
           mainContent.innerHTML = this.renderGovHolidays(this.cachedHolidays);
@@ -394,157 +394,197 @@ export default class LeaveTrackerWebPart extends BaseClientSideWebPart<ILeaveTra
     const userLeaves = this.cachedTeamMembers.filter(m =>
       m.EmployeeEmail && m.EmployeeEmail.toLowerCase() === currentUserEmail
     );
+    console.log("userLeaves", userLeaves);
+
+    console.log("this.cachedTeamMembers", this.cachedTeamMembers);
+
 
     const now = new Date();
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(now.getMonth() - 1);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30); // Last 30 days
 
+    // ⭐ Filter leaves from last 30 days only
     const lastMonthLeaves = userLeaves.filter(item => {
-      const start = new Date(item.StartDate);
-      return start >= oneMonthAgo && start <= now;
+      const requestDate = new Date(item.RequestDate || item.StartDate);
+      return requestDate >= thirtyDaysAgo && requestDate <= now;
     });
+    console.log("lastMonthLeaves", lastMonthLeaves);
+
 
     const total = lastMonthLeaves.length;
-    const approved = lastMonthLeaves.filter(l => l.Status === "Approve").length;
-    const rejected = lastMonthLeaves.filter(l => l.Status === "Rejected").length;
-    const pending = lastMonthLeaves.filter(l => l.Status === "Pending").length;
+    console.log("total", total);
+
+
+    // Use toLowerCase() for comparison
+    const approved = lastMonthLeaves.filter(l =>
+      l.Status?.toLowerCase() === "approve" || l.Status?.toLowerCase() === "approved"
+    ).length;
+
+    const rejected = lastMonthLeaves.filter(l =>
+      l.Status?.toLowerCase() === "reject" || l.Status?.toLowerCase() === "rejected"
+    ).length;
+
+    const pending = lastMonthLeaves.filter(l =>
+      l.Status?.toLowerCase() === "pending"
+    ).length;
+
+    // ⭐ Calculate total approved days in last 30 days
+    const flexibleDaysUsed = lastMonthLeaves
+      .filter(l => l.Status?.toLowerCase() === "approve" || l.Status?.toLowerCase() === "approved")
+      .reduce((sum, leave) => sum + (leave.NumberOfDays || 0), 0);
 
     const statusClassMap: Record<string, string> = {
+      approve: styles.approved,
       approved: styles.approved,
       pending: styles.pending,
+      reject: styles.rejected,
       rejected: styles.rejected
     };
 
+    console.log("statusClassMap", statusClassMap);
+
     const recentList = lastMonthLeaves
+      .sort((a, b) => {
+        // Sort by most recent first
+        const dateA = new Date(a.RequestDate || a.StartDate).getTime();
+        const dateB = new Date(b.RequestDate || b.StartDate).getTime();
+        return dateB - dateA;
+      })
       .slice(0, 5)
-      .map(l => `
+      .map(l => {
+        const startDate = new Date(l.StartDate);
+        const endDate = new Date(l.EndDate);
+        const statusLower = l.Status?.toLowerCase() || '';
+
+        return `
         <div class="${styles.recentItem}">
-          <div>${escape(l.LeaveType)}</div>
-          <div>${new Date(l.StartDate).toLocaleDateString()} → ${new Date(l.EndDate).toLocaleDateString()}</div>
-          <span class="${styles.status} ${statusClassMap[l.Status?.toLowerCase()] || ""}">
+          <div><strong>${escape(l.LeaveType)}</strong></div>
+          <div>${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} → ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${l.NumberOfDays || 0} days)</div>
+          <span class="${styles.status} ${statusClassMap[statusLower] || ''}">
             ${escape(l.Status)}
           </span>
         </div>
-      `)
+      `;
+      })
       .join("");
 
     return `
-      <div class="${styles.dashboardWrapper}">
-        
-        <!-- Title Card -->
-        <div class="${styles.card}">
-          <h1>Dashboard</h1>
-          <p>Summary of your leave balance and activities (Last 30 Days).</p>
-        </div>
-
-        <!-- Summary Grid -->
-        <div class="${styles.summaryGrid}">
-          <div class="${styles.summaryCard}">
-            <div>
-              <h3>${total}</h3>
-              <p>Total Requests</p>
-            </div>
-          </div>
-
-          <div class="${styles.summaryCard}">
-            <div>
-              <h3>${approved}</h3>
-              <p>Approved</p>
-            </div>
-          </div>
-
-          <div class="${styles.summaryCard}">
-            <div>
-              <h3>${pending}</h3>
-              <p>Pending</p>
-            </div>
-          </div>
-
-          <div class="${styles.summaryCard}">
-            <div>
-              <h3>${rejected}</h3>
-              <p>Rejected</p>
-            </div>
-          </div>
-
-          <div class="${styles.summaryCard}">
-            <div>
-              <h5>Flexible </h5>
-              <p>Total Days</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Leaves -->
-        <div class="${styles.card}">
-          <h2>Recent Leave Entries</h2>
-          <div class="${styles.recentList}">
-            ${recentList || "<p>No leave data for the last 30 days.</p>"}
-          </div>
-        </div>
-
+    <div class="${styles.dashboardWrapper}">
+      
+      <!-- Title Card -->
+      <div class="${styles.card}">
+        <h1>Dashboard</h1>
+        <p>Summary of your leave balance and activities (Last 30 Days).</p>
       </div>
-    `;
+
+      <!-- Summary Grid -->
+      <div class="${styles.summaryGrid}">
+        <div class="${styles.summaryCard}">
+          <div>
+            <h3>${total}</h3>
+            <p>Total Requests</p>
+          </div>
+        </div>
+
+        <div class="${styles.summaryCard}">
+          <div>
+            <h3>${approved}</h3>
+            <p>Approved</p>
+          </div>
+        </div>
+
+        <div class="${styles.summaryCard}">
+          <div>
+            <h3>${pending}</h3>
+            <p>Pending</p>
+          </div>
+        </div>
+
+        <div class="${styles.summaryCard}">
+          <div>
+            <h3>${rejected}</h3>
+            <p>Rejected</p>
+          </div>
+        </div>
+
+        <div class="${styles.summaryCard}">
+          <div>
+            <h3>${flexibleDaysUsed}</h3>
+            <p>Flexible Days Used</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Leaves -->
+      <div class="${styles.card}">
+        <h2>Recent Leave Entries</h2>
+        <div class="${styles.recentList}">
+          ${recentList || "<p>No leave data for the last 30 days.</p>"}
+        </div>
+      </div>
+
+    </div>
+  `;
   }
-private async getManagerEmail(): Promise<string | null> {
-  try {
-    const currentUserEmail = this.getCurrentUserEmail();
-    console.log("⬅️ Current User Email:", currentUserEmail);
+  private async getManagerEmail(): Promise<string | null> {
+    try {
+      const currentUserEmail = this.getCurrentUserEmail();
+      console.log("⬅️ Current User Email:", currentUserEmail);
 
-    const profileUrl = `${this.context.pageContext.web.absoluteUrl}/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='i:0%23.f|membership|${encodeURIComponent(currentUserEmail)}'`;
-    console.log("🔗 Profile API URL:", profileUrl);
+      const profileUrl = `${this.context.pageContext.web.absoluteUrl}/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='i:0%23.f|membership|${encodeURIComponent(currentUserEmail)}'`;
+      console.log("🔗 Profile API URL:", profileUrl);
 
-    const response = await this.context.spHttpClient.get(
-      profileUrl,
-      SPHttpClient.configurations.v1,
-      {
-        headers: {
-          'Accept': 'application/json;odata=nometadata',
-          'odata-version': ''
+      const response = await this.context.spHttpClient.get(
+        profileUrl,
+        SPHttpClient.configurations.v1,
+        {
+          headers: {
+            'Accept': 'application/json;odata=nometadata',
+            'odata-version': ''
+          }
         }
-      }
-    );
+      );
 
-    console.log("📡 API Response Status:", response.status);
+      console.log("📡 API Response Status:", response.status);
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log("📦 Profile Data Received:", data);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("📦 Profile Data Received:", data);
 
-      if (data.UserProfileProperties) {
-        console.log("🔍 Searching for Manager property...");
-        const managerProperty = data.UserProfileProperties.find(
-          (prop: any) => prop.Key === 'Manager'
-        );
+        if (data.UserProfileProperties) {
+          console.log("🔍 Searching for Manager property...");
+          const managerProperty = data.UserProfileProperties.find(
+            (prop: any) => prop.Key === 'Manager'
+          );
 
-        console.log("🧠 Manager Property:", managerProperty);
+          console.log("🧠 Manager Property:", managerProperty);
 
-        if (managerProperty && managerProperty.Value) {
-          const managerAccountName = managerProperty.Value;
-          console.log("👤 Raw Manager Account Name:", managerAccountName);
+          if (managerProperty && managerProperty.Value) {
+            const managerAccountName = managerProperty.Value;
+            console.log("👤 Raw Manager Account Name:", managerAccountName);
 
-          const emailMatch = managerAccountName.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-          console.log("📧 Extracted Manager Email:", emailMatch ? emailMatch[0] : "Not found");
+            const emailMatch = managerAccountName.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            console.log("📧 Extracted Manager Email:", emailMatch ? emailMatch[0] : "Not found");
 
-          if (emailMatch) {
-            return emailMatch[0];
+            if (emailMatch) {
+              return emailMatch[0];
+            }
+          } else {
+            console.warn("⚠ Manager property NOT found in profile.");
           }
         } else {
-          console.warn("⚠ Manager property NOT found in profile.");
+          console.warn("⚠ No UserProfileProperties found.");
         }
-      } else {
-        console.warn("⚠ No UserProfileProperties found.");
       }
+
+      console.warn("⚠ Response not OK. Manager email not found.");
+      return null;
+
+    } catch (error) {
+      console.error('❌ Error getting manager email:', error);
+      return null;
     }
-
-    console.warn("⚠ Response not OK. Manager email not found.");
-    return null;
-
-  } catch (error) {
-    console.error('❌ Error getting manager email:', error);
-    return null;
   }
-}
 
 
 
@@ -609,65 +649,65 @@ private async getManagerEmail(): Promise<string | null> {
   `;
   }
 
-private async initializeManagerEmail(): Promise<void> {
-  console.log("🚀 Initializing Manager Email...");
+  private async initializeManagerEmail(): Promise<void> {
+    console.log("🚀 Initializing Manager Email...");
 
-  const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
-  const managerStatus = this.domElement.querySelector('#managerStatus') as HTMLSpanElement;
-  const managerPickerContainer = this.domElement.querySelector('#managerPickerContainer') as HTMLDivElement;
+    const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
+    const managerStatus = this.domElement.querySelector('#managerStatus') as HTMLSpanElement;
+    const managerPickerContainer = this.domElement.querySelector('#managerPickerContainer') as HTMLDivElement;
 
-  if (!managerEmailInput || !managerStatus) {
-    console.error("❌ Manager email input or status field missing!");
-    return;
-  }
-
-  try {
-    const managerEmail = await this.getManagerEmail();
-    console.log("📧 Manager Email Returned:", managerEmail);
-
-    if (managerEmail) {
-      console.log("✅ Manager email found automatically");
-      managerEmailInput.value = managerEmail;
-      managerEmailInput.readOnly = true;
-      managerStatus.textContent = '✓ Manager found automatically';
-      managerStatus.style.color = 'green';
-    } else {
-      console.warn("⚠ Manager email NOT found, showing picker...");
-      managerEmailInput.readOnly = false;
-      managerEmailInput.placeholder = 'Enter manager email manually or use picker below';
-      managerStatus.textContent = '⚠ Manager not found. Please enter manually or select below.';
-      managerStatus.style.color = 'orange';
-
-      if (managerPickerContainer) {
-        managerPickerContainer.style.display = 'block';
-        await this.initializePeoplePicker();
-      }
+    if (!managerEmailInput || !managerStatus) {
+      console.error("❌ Manager email input or status field missing!");
+      return;
     }
-  } catch (error) {
-    console.error('❌ Error initializing manager email:', error);
-    managerEmailInput.readOnly = false;
-    managerStatus.textContent = '⚠ Could not fetch manager. Please enter manually.';
-    managerStatus.style.color = 'red';
+
+    try {
+      const managerEmail = await this.getManagerEmail();
+      console.log("📧 Manager Email Returned:", managerEmail);
+
+      if (managerEmail) {
+        console.log("✅ Manager email found automatically");
+        managerEmailInput.value = managerEmail;
+        managerEmailInput.readOnly = true;
+        managerStatus.textContent = '✓ Manager found automatically';
+        managerStatus.style.color = 'green';
+      } else {
+        console.warn("⚠ Manager email NOT found, showing picker...");
+        managerEmailInput.readOnly = false;
+        managerEmailInput.placeholder = 'Enter manager email manually or use picker below';
+        managerStatus.textContent = '⚠ Manager not found. Please enter manually or select below.';
+        managerStatus.style.color = 'orange';
+
+        if (managerPickerContainer) {
+          managerPickerContainer.style.display = 'block';
+          await this.initializePeoplePicker();
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error initializing manager email:', error);
+      managerEmailInput.readOnly = false;
+      managerStatus.textContent = '⚠ Could not fetch manager. Please enter manually.';
+      managerStatus.style.color = 'red';
+    }
   }
-}
 
 
   // Initialize People Picker for manager selection
- // Initialize People Picker for manager selection
-private async initializePeoplePicker(): Promise<void> {
-  console.log("🔵 Initializing People Picker...");
+  // Initialize People Picker for manager selection
+  private async initializePeoplePicker(): Promise<void> {
+    console.log("🔵 Initializing People Picker...");
 
-  const pickerContainer = this.domElement.querySelector('#managerPeoplePicker') as HTMLDivElement;
-  const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
+    const pickerContainer = this.domElement.querySelector('#managerPeoplePicker') as HTMLDivElement;
+    const managerEmailInput = this.domElement.querySelector('#managerEmail') as HTMLInputElement;
 
-  if (!pickerContainer) {
-    console.error("❌ Picker container (#managerPeoplePicker) NOT found in DOM!");
-    return;
-  }
+    if (!pickerContainer) {
+      console.error("❌ Picker container (#managerPeoplePicker) NOT found in DOM!");
+      return;
+    }
 
-  console.log("✅ Picker container found.");
+    console.log("✅ Picker container found.");
 
-  pickerContainer.innerHTML = `
+    pickerContainer.innerHTML = `
     <input type="text" 
            id="managerSearch" 
            class="${styles.input}" 
@@ -676,31 +716,31 @@ private async initializePeoplePicker(): Promise<void> {
     <div id="managerResults" style="max-height:150px; overflow-y:auto; border:1px solid #ddd; display:none;"></div>
   `;
 
-  const searchInput = pickerContainer.querySelector('#managerSearch') as HTMLInputElement;
-  const resultsDiv = pickerContainer.querySelector('#managerResults') as HTMLDivElement;
+    const searchInput = pickerContainer.querySelector('#managerSearch') as HTMLInputElement;
+    const resultsDiv = pickerContainer.querySelector('#managerResults') as HTMLDivElement;
 
-  console.log("🔧 Search input and results div created.");
+    console.log("🔧 Search input and results div created.");
 
-  // Search on typing
-  searchInput.addEventListener('input', async (e) => {
-    const searchText = (e.target as HTMLInputElement).value;
+    // Search on typing
+    searchInput.addEventListener('input', async (e) => {
+      const searchText = (e.target as HTMLInputElement).value;
 
-    console.log("⌨ User typing:", searchText);
+      console.log("⌨ User typing:", searchText);
 
-    if (searchText.length < 2) {
-      console.log("ℹ Search text too short, hiding results.");
-      resultsDiv.style.display = "none";
-      return;
-    }
+      if (searchText.length < 2) {
+        console.log("ℹ Search text too short, hiding results.");
+        resultsDiv.style.display = "none";
+        return;
+      }
 
-    try {
-      console.log("🔍 Searching users for:", searchText);
-      const users = await this.searchUsers(searchText);
+      try {
+        console.log("🔍 Searching users for:", searchText);
+        const users = await this.searchUsers(searchText);
 
-      console.log("📥 Users returned from API:", users);
+        console.log("📥 Users returned from API:", users);
 
-      if (users.length > 0) {
-        resultsDiv.innerHTML = users.map(user => `
+        if (users.length > 0) {
+          resultsDiv.innerHTML = users.map(user => `
           <div class="user-result" 
                data-email="${user.Email}" 
                style="padding:8px; cursor:pointer; border-bottom:1px solid #eee;">
@@ -709,62 +749,62 @@ private async initializePeoplePicker(): Promise<void> {
           </div>
         `).join('');
 
-        resultsDiv.style.display = "block";
-        console.log("📋 Displaying results.");
+          resultsDiv.style.display = "block";
+          console.log("📋 Displaying results.");
 
-        // Add click handlers
-        resultsDiv.querySelectorAll('.user-result').forEach(item => {
-          item.addEventListener('click', () => {
-            const email = item.getAttribute('data-email');
-            console.log("🖱 User clicked:", email);
+          // Add click handlers
+          resultsDiv.querySelectorAll('.user-result').forEach(item => {
+            item.addEventListener('click', () => {
+              const email = item.getAttribute('data-email');
+              console.log("🖱 User clicked:", email);
 
-            if (email && managerEmailInput) {
-              managerEmailInput.value = email;
-              console.log("✔ Manager email updated:", email);
+              if (email && managerEmailInput) {
+                managerEmailInput.value = email;
+                console.log("✔ Manager email updated:", email);
 
-              resultsDiv.style.display = "none";
-              searchInput.value = "";
-            }
+                resultsDiv.style.display = "none";
+                searchInput.value = "";
+              }
+            });
           });
-        });
 
-      } else {
-        console.warn("⚠ No matching users found for:", searchText);
-        resultsDiv.innerHTML = '<div style="padding:8px;">No users found</div>';
-        resultsDiv.style.display = "block";
+        } else {
+          console.warn("⚠ No matching users found for:", searchText);
+          resultsDiv.innerHTML = '<div style="padding:8px;">No users found</div>';
+          resultsDiv.style.display = "block";
+        }
+
+      } catch (error) {
+        console.error("❌ Error searching users:", error);
       }
+    });
+  }
+
+
+  // Search Users API Call
+  private async searchUsers(searchText: string): Promise<any[]> {
+    try {
+      const graphClient = await this.context.msGraphClientFactory.getClient("3");
+
+      const response = await graphClient
+        .api("/users")
+        .filter(`startswith(displayName,'${searchText}') or startswith(mail,'${searchText}')`)
+        .select("id,displayName,mail,userPrincipalName")
+        .top(20)
+        .get();
+
+      console.log("🔎 Graph Search Response:", response);
+
+      return response.value.map((user: any) => ({
+        Title: user.displayName,
+        Email: user.mail || user.userPrincipalName
+      }));
 
     } catch (error) {
-      console.error("❌ Error searching users:", error);
+      console.error("❌ Graph API Search Error:", error);
+      return [];
     }
-  });
-}
-
-
-// Search Users API Call
-private async searchUsers(searchText: string): Promise<any[]> {
-  try {
-    const graphClient = await this.context.msGraphClientFactory.getClient("3");
-
-    const response = await graphClient
-      .api("/users")
-      .filter(`startswith(displayName,'${searchText}') or startswith(mail,'${searchText}')`)
-      .select("id,displayName,mail,userPrincipalName")
-      .top(20)
-      .get();
-
-    console.log("🔎 Graph Search Response:", response);
-
-    return response.value.map((user: any) => ({
-      Title: user.displayName,
-      Email: user.mail || user.userPrincipalName
-    }));
-
-  } catch (error) {
-    console.error("❌ Graph API Search Error:", error);
-    return [];
   }
-}
 
 
 
@@ -937,31 +977,37 @@ private async searchUsers(searchText: string): Promise<any[]> {
       });
     });
 
-    // Month tabs with proper filtering
-    const monthTabs = this.domElement.querySelectorAll('[data-month]');
-    monthTabs.forEach((tab: Element) => {
-      tab.addEventListener('click', (e: Event) => {
-        const button = e.currentTarget as HTMLElement;
-        const month = parseInt(button.getAttribute('data-month') || '0');
+    // ⭐ FIX: Month tabs - ONLY select buttons in monthTabs, NOT table rows
+    const monthTabsContainer = this.domElement.querySelector(`.${styles.monthTabs}`);
+    if (monthTabsContainer) {
+      const monthTabs = monthTabsContainer.querySelectorAll(`.${styles.monthTab}[data-month]`);
+      monthTabs.forEach((tab: Element) => {
+        tab.addEventListener('click', (e: Event) => {
+          e.stopPropagation(); // Prevent event bubbling
+          const button = e.currentTarget as HTMLElement;
+          const month = parseInt(button.getAttribute('data-month') || '0');
 
-        console.log("Month clicked:", month);
+          console.log("Month clicked:", month);
 
-        monthTabs.forEach(t => t.classList.remove(styles.monthTabActive));
-        button.classList.add(styles.monthTabActive);
+          // Remove active class from all month tabs
+          monthTabs.forEach(t => t.classList.remove(styles.monthTabActive));
+          button.classList.add(styles.monthTabActive);
 
-        const rows = this.domElement.querySelectorAll(`.${styles.tableRow}`);
-        rows.forEach((row: Element) => {
-          const rowElement = row as HTMLElement;
-          const rowMonth = parseInt(rowElement.getAttribute('data-month') || '-1');
+          // Filter table rows by month - show ONLY selected month
+          const rows = this.domElement.querySelectorAll(`.${styles.tableRow}[data-month]`);
+          rows.forEach((row: Element) => {
+            const rowElement = row as HTMLElement;
+            const rowMonth = parseInt(rowElement.getAttribute('data-month') || '-1');
 
-          if (rowMonth === month) {
-            rowElement.style.display = '';
-          } else {
-            rowElement.style.display = 'none';
-          }
+            if (rowMonth === month) {
+              rowElement.style.display = '';
+            } else {
+              rowElement.style.display = 'none';
+            }
+          });
         });
       });
-    });
+    }
 
     // Search input for admin view
     const searchInput = this.domElement.querySelector('#searchEmployee') as HTMLInputElement;
@@ -982,6 +1028,14 @@ private async searchUsers(searchText: string): Promise<any[]> {
             rowElement.style.display = 'none';
           }
         });
+      });
+    }
+
+    // ⭐ FIX: Prevent table clicks from triggering month filter
+    const tableContainer = this.domElement.querySelector(`.${styles.modernTable}`);
+    if (tableContainer) {
+      tableContainer.addEventListener('click', (e: Event) => {
+        e.stopPropagation(); // Stop event from bubbling up
       });
     }
 
@@ -1115,7 +1169,7 @@ private async searchUsers(searchText: string): Promise<any[]> {
     }
   }
 
-  private renderLeaveHistory(teamMembers: ITeamMember[], filter: string = 'all', viewMode: string = 'all'): string {
+  private renderLeaveHistory(teamMembers: ITeamMember[], filter: string = 'all', viewMode: string = 'all', selectedMonth?: number): string {
     const currentUserEmail = this.getCurrentUserEmail();
 
     console.log("Rendering leave history - Is Admin:", this.isAdmin);
@@ -1183,7 +1237,10 @@ private async searchUsers(searchText: string): Promise<any[]> {
 
     const currentYear = new Date().getFullYear();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentMonth = new Date().getMonth();
+    const currentMonth = new Date().getMonth(); // This is 11 for December
+
+    // ⭐ Use selectedMonth if provided, otherwise use currentMonth
+    const activeMonth = selectedMonth !== undefined ? selectedMonth : currentMonth;
 
     const rows = filteredLeaves.length > 0 ? filteredLeaves.map(leave => {
       const startDate = new Date(leave.StartDate);
@@ -1220,27 +1277,31 @@ private async searchUsers(searchText: string): Promise<any[]> {
       const onLeaveNow = isOnLeaveToday(leave);
       const rowClass = onLeaveNow ? `${styles.tableRow} ${styles.onLeaveRow}` : styles.tableRow;
 
+      // ⭐ Initially hide rows that don't match current month
+      const leaveMonth = startDate.getMonth();
+      const displayStyle = (selectedMonth === undefined && leaveMonth !== currentMonth) ? 'none' : '';
+
       return `
-      <tr class="${rowClass}" data-month="${startDate.getMonth()}" data-employee="${escape(leave.EmployeeName?.Title || leave.EmployeeEmail || '')}">
-        <td class="${styles.tableCell}">
-          <div class="${styles.employeeInfo}">
-            <div class="${styles.avatar} ${onLeaveNow ? styles.avatarOnLeave : ''}">${(leave.EmployeeName?.Title || leave.EmployeeEmail || 'U')[0].toUpperCase()}</div>
-            <span class="${styles.employeeName}">
-              ${escape(leave.EmployeeName?.Title || leave.EmployeeEmail || 'N/A')}
-              ${onLeaveNow ? '<span class="' + styles.onLeaveBadge + '">🟢 On Leave</span>' : ''}
-            </span>
-          </div>
-        </td>
-        <td class="${styles.tableCell}">${escape(leave.LeaveType)}</td>
-        <td class="${styles.tableCell}">
-          <span class="${getStatusClass(leave.Status)}">${escape(leave.Status)}</span>
-        </td>
-        <td class="${styles.tableCell}">${dateRange} (${numberOfDays}d)</td>
-        <td class="${styles.tableCell}" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escape(leave.Reason || '-')}">${escape(leave.Reason || '-')}</td>
-        <td class="${styles.tableCell}">${formattedRequestDate}</td>
-        <td class="${styles.tableCell}">${approverInfo}</td>
-      </tr>
-    `;
+    <tr class="${rowClass}" data-month="${leaveMonth}" data-employee="${escape(leave.EmployeeName?.Title || leave.EmployeeEmail || '')}" style="display: ${displayStyle};">
+      <td class="${styles.tableCell}">
+        <div class="${styles.employeeInfo}">
+          <div class="${styles.avatar} ${onLeaveNow ? styles.avatarOnLeave : ''}">${(leave.EmployeeName?.Title || leave.EmployeeEmail || 'U')[0].toUpperCase()}</div>
+          <span class="${styles.employeeName}">
+            ${escape(leave.EmployeeName?.Title || leave.EmployeeEmail || 'N/A')}
+            ${onLeaveNow ? '<span class="' + styles.onLeaveBadge + '">🟢 On Leave</span>' : ''}
+          </span>
+        </div>
+      </td>
+      <td class="${styles.tableCell}">${escape(leave.LeaveType)}</td>
+      <td class="${styles.tableCell}">
+        <span class="${getStatusClass(leave.Status)}">${escape(leave.Status)}</span>
+      </td>
+      <td class="${styles.tableCell}">${dateRange} (${numberOfDays}d)</td>
+      <td class="${styles.tableCell}" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escape(leave.Reason || '-')}">${escape(leave.Reason || '-')}</td>
+      <td class="${styles.tableCell}">${formattedRequestDate}</td>
+      <td class="${styles.tableCell}">${approverInfo}</td>
+    </tr>
+  `;
     }).join('') : `<tr><td colspan="7" class="${styles.emptyState}">No leave records found</td></tr>`;
 
     const filterOptions = [
@@ -1251,81 +1312,81 @@ private async searchUsers(searchText: string): Promise<any[]> {
     ];
 
     return `
-    <div class="${styles.leaveHistoryContainer}">
-      <!-- Header with filters and view toggle -->
-      <div class="${styles.tableHeader}">
-        <div class="${styles.filterSection}">
-          ${this.isAdmin ? `
-            <div class="${styles.viewToggle}">
-              <button 
-                class="${styles.toggleBtn} ${viewMode === 'all' ? styles.toggleBtnActive : ''}" 
-                data-view-mode="all"
-              >
-                All Requests
-              </button>
-              <button 
-                class="${styles.toggleBtn} ${viewMode === 'mine' ? styles.toggleBtnActive : ''}" 
-                data-view-mode="mine"
-              >
-                My Requests
-              </button>
-            </div>
-          ` : ''}
-          
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <span class="${styles.filterLabel}">Filter by</span>
-            <select class="${styles.filterSelect}" id="timeFilter">
-              ${filterOptions.map(opt => `
-                <option value="${opt.value}" ${filter === opt.value ? 'selected' : ''}>${opt.label}</option>
-              `).join('')}
-            </select>
-            
-            ${this.isAdmin && viewMode === 'all' ? `
-              <input 
-                type="text" 
-                id="searchEmployee" 
-                class="${styles.searchInput}" 
-                placeholder="🔍 Search employee..."
-              />
-            ` : ''}
+  <div class="${styles.leaveHistoryContainer}">
+    <!-- Header with filters and view toggle -->
+    <div class="${styles.tableHeader}">
+      <div class="${styles.filterSection}">
+        ${this.isAdmin ? `
+          <div class="${styles.viewToggle}">
+            <button 
+              class="${styles.toggleBtn} ${viewMode === 'all' ? styles.toggleBtnActive : ''}" 
+              data-view-mode="all"
+            >
+              All Requests
+            </button>
+            <button 
+              class="${styles.toggleBtn} ${viewMode === 'mine' ? styles.toggleBtnActive : ''}" 
+              data-view-mode="mine"
+            >
+              My Requests
+            </button>
           </div>
+        ` : ''}
+        
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <span class="${styles.filterLabel}">Filter by</span>
+          <select class="${styles.filterSelect}" id="timeFilter">
+            ${filterOptions.map(opt => `
+              <option value="${opt.value}" ${filter === opt.value ? 'selected' : ''}>${opt.label}</option>
+            `).join('')}
+          </select>
+          
+          ${this.isAdmin && viewMode === 'all' ? `
+            <input 
+              type="text" 
+              id="searchEmployee" 
+              class="${styles.searchInput}" 
+              placeholder="🔍 Search employee..."
+            />
+          ` : ''}
         </div>
       </div>
-
-      <!-- Month tabs -->
-      <div class="${styles.monthTabs}">
-        <div class="${styles.yearLabel}">${currentYear}</div>
-        ${months.map((month, index) => `
-          <button 
-            class="${styles.monthTab} ${index === currentMonth ? styles.monthTabActive : ''}" 
-            data-month="${index}"
-          >
-            ${month}
-          </button>
-        `).join('')}
-      </div>
-
-      <!-- Table -->
-      <div class="${styles.modernTable}">
-        <table style="width: 100%;">
-          <thead>
-            <tr class="${styles.tableHeaderRow}">
-              <th class="${styles.tableHeader}">NAME</th>
-              <th class="${styles.tableHeader}">LEAVE TYPE</th>
-              <th class="${styles.tableHeader}">STATUS</th>
-              <th class="${styles.tableHeader}">LEAVE PERIOD</th>
-              <th class="${styles.tableHeader}">REASON</th>
-              <th class="${styles.tableHeader}">REQUESTED ON</th>
-              <th class="${styles.tableHeader}">APPROVAL INFO</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
-      </div>
     </div>
-  `;
+
+    <!-- Month tabs -->
+    <div class="${styles.monthTabs}">
+      <div class="${styles.yearLabel}">${currentYear}</div>
+      ${months.map((month, index) => `
+        <button 
+          class="${styles.monthTab} ${index === activeMonth ? styles.monthTabActive : ''}" 
+          data-month="${index}"
+        >
+          ${month}
+        </button>
+      `).join('')}
+    </div>
+
+    <!-- Table -->
+    <div class="${styles.modernTable}">
+      <table style="width: 100%;">
+        <thead>
+          <tr class="${styles.tableHeaderRow}">
+            <th class="${styles.tableHeader}">NAME</th>
+            <th class="${styles.tableHeader}">LEAVE TYPE</th>
+            <th class="${styles.tableHeader}">STATUS</th>
+            <th class="${styles.tableHeader}">LEAVE PERIOD</th>
+            <th class="${styles.tableHeader}">REASON</th>
+            <th class="${styles.tableHeader}">REQUESTED ON</th>
+            <th class="${styles.tableHeader}">APPROVAL INFO</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  </div>
+`;
   }
 
   private getFilterDate(filter: string): Date {

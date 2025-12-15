@@ -761,6 +761,8 @@
     border-radius: 6px;
     transition: all 0.2s;
     white-space: nowrap;
+    position: relative; // Add this
+    z-index: 1; // Add this
 
     &:hover {
       background: #e5e7eb;
@@ -777,6 +779,8 @@
 
   .modernTable {
     overflow-x: auto;
+    position: relative; // Add this
+    z-index: 2; // Add this - higher than monthTabs
 
     table {
       width: 100%;
